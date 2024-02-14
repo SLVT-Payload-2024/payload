@@ -18,12 +18,17 @@
 // Define the RX and TX pins for your SoftwareSerial connection
 const int rxPin = 2;
 const int txPin = 3;
-const int svPin = 11;
-const int sdPin = 10;
+
+// SD Card
+// const int svPin = 11;
+// const int sdPin = 10;
 
 // Define the digital pins for the deployment relays
 const int rly1 = 7;
 const int rly2 = 8;
+
+// Define the digital pin for the buzzer
+const int buzz = 4;
 
 const bool TEST = true;
 
@@ -56,6 +61,14 @@ float ground_pressure = 0;
 float alti;
 
 void setup() {
+  pinMode(buzz, OUTPUT);
+  for (int i = 0; i < 1; i++) {
+    digitalWrite(buzz, HIGH);
+    delay(500);
+    digitalWrite(buzz, LOW);
+    delay(500);
+  }
+
   // Start the serial communication with the Arduino IDE Serial Monitor
   Serial.begin(57600);
   Serial.print("Serial set up");
@@ -63,24 +76,25 @@ void setup() {
   rfSerial.begin(57600);
   rfSerial.println("RF set up");
 
-  rfSerial.println("Init SD Card");
-  pinMode(sdPin, OUTPUT);
-  if (!SD.begin(10)) {
-    rfSerial.println("Init Failed!");
-    return;
-  }
+  // rfSerial.println("Init SD Card");
+  // pinMode(sdPin, OUTPUT);
+  // if (!SD.begin(10)) {
+  //   rfSerial.println("Init Failed!");
+  //   return;
+  // }
+
   rfSerial.println("Init Done.");
-  sdFile = SD.open("log_file.txt", FILE_WRITE);
+  // sdFile = SD.open("log_file.txt", FILE_WRITE);
 
   //mplSetup();
   dpsSetup();
-  imuSetup();
+  // imuSetup();
 
   //MPL Ground Zero
   // for(int i=1; i<=AVG_COUNT; i++){
   //   ground_alti = ground_alti*(i-1)/i + mpl.getAltitude()/i;
   // }
-  
+
   //DPS Ground Zero
   sensors_event_t temp_event, pressure_event;
   for (int i = 1; i <= AVG_COUNT; i++) {
@@ -90,7 +104,7 @@ void setup() {
     //ground_alti = ((ground_alti * (i - 1)) / i) + (dps.readAltitude(1013.25) / i);
 
     //Ground Pressure Approach
-    ground_pressure = ((ground_pressure * (i-1))/i) + (pressure_event.pressure/i);
+    ground_pressure = ((ground_pressure * (i - 1)) / i) + (pressure_event.pressure / i);
   }
 
   //Make the relay's digital pins outputs
@@ -108,16 +122,17 @@ void loop() {
 
   alti = dps.readAltitude(ground_pressure);
 
-  sensors_event_t event;
-  imuBNO.getEvent(&event);
-  imu::Quaternion quat = imuBNO.getQuat();
-  imu::Vector<3> linacce = imuBNO.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
-  imu::Vector<3> gvec = imuBNO.getVector(Adafruit_BNO055::VECTOR_GRAVITY);
+  // sensors_event_t event;
+  // imuBNO.getEvent(&event);
+  // imu::Quaternion quat = imuBNO.getQuat();
+  // imu::Vector<3> linacce = imuBNO.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
+  // imu::Vector<3> gvec = imuBNO.getVector(Adafruit_BNO055::VECTOR_GRAVITY);
 
-  print2RF(String(alti));
-  print2RF(String(linacce.x())+" "+linacce.y()+" "+linacce.z());
-  print2RF(String(quat.w())+" "+quat.x()+" "+quat.y()+" "+quat.z());
-  print2RF(String(gvec.x())+" "+gvec.y()+" "+gvec.z());
+  //print2RF(String(alti));
+  //Serial.println(alti);
+  // print2RF(String(linacce.x())+" "+linacce.y()+" "+linacce.z());
+  // print2RF(String(quat.w())+" "+quat.x()+" "+quat.y()+" "+quat.z());
+  // print2RF(String(gvec.x())+" "+gvec.y()+" "+gvec.z());
 
   getCommand();
   switch (deployState) {
@@ -126,6 +141,7 @@ void loop() {
       if (alti > TOL_GROUND || TEST && newData == true && (strcmp(receivedChars, "ascent") == 0)) {
         deployState = Ascent;
         print2RF("Ascent in action...");
+        Serial.println("Ascent in action");
       }
       break;
 
@@ -133,6 +149,7 @@ void loop() {
       if (alti > DEPLOY_ALTI || TEST && newData == true && (strcmp(receivedChars, "desc") == 0)) {
         deployState = Descent;
         print2RF("Descent in action...");
+        Serial.println("Descent in action");
       }
       break;
 
@@ -147,6 +164,8 @@ void loop() {
         digitalWrite(rly2, HIGH);
         print2RF("Relay 2 Fire...");
         print2RF("Payload Deployed...");
+        Serial.println("Deployed");
+
         deployState = Pad;
       }
       break;
@@ -156,10 +175,11 @@ void loop() {
       deployState = Pad;
       break;
   }
+  showCommand();
   if (newData) {
     newData = false;
   }
-  //showCommand();
+  
 }
 
 void getCommand() {
@@ -198,7 +218,7 @@ void showCommand() {
   if (newData == true) {
     //Serial.print("This just in ... ");
     Serial.println(receivedChars);
-    newData = false;
+    // newData = false;
   }
 }
 
@@ -221,13 +241,13 @@ void dpsSetup() {
   dps.configureTemperature(DPS310_64HZ, DPS310_64SAMPLES);
 }
 
-void imuSetup() {
-  if (!imuBNO.begin()) {
-    print2RF("NoIMU");
-    imuSetup();
-  }
-  imuBNO.setExtCrystalUse(true);
-}
+// void imuSetup() {
+//   if (!imuBNO.begin()) {
+//     print2RF("NoIMU");
+//     imuSetup();
+//   }
+//   imuBNO.setExtCrystalUse(true);
+// }
 
 void print2RF(String message) {
   unsigned long sysClock = millis() - startTime;
